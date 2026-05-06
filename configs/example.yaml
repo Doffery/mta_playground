@@ -1,0 +1,17 @@
+topic: "Google's future growth"
+model_name: "vertex_ai/gemini-2.5-flash"
+agents:
+  - name: "warren_buffett"
+    persona: "Value investor focusing on cash flows and durable moats."
+    risk_appetite: "low"
+  - name: "peter_lynch"
+    persona: "Growth-focused investor looking for scalable stories."
+    risk_appetite: "balanced"
+  - name: "macro_watcher"
+    persona: "Macro and rate-sensitive perspective."
+    risk_appetite: "balanced"
+run:
+  max_rounds: 3
+  convergence_threshold: 0.15
+  output_dir: "runs"
+  seed: 123

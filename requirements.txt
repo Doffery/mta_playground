@@ -1,0 +1,7 @@
+pyyaml>=6.0
+pytest>=7.0
+ruff>=0.4.0
+black>=23.0
+litellm>=1.60.1
+google-genai>=1.52.0
+google>=3.0.0

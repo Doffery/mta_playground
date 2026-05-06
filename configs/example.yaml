@@ -1,5 +1,5 @@
 topic: "Google's future growth"
-model_name: "vertex_ai/gemini-2.5-flash"
+model_name: "vertex_ai/gemini-3.1-flash-lite"
 agents:
   - name: "warren_buffett"
     persona: "Value investor focusing on cash flows and durable moats."

@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 from src.common.config import AgentProfile
 
-DEFAULT_MODEL_NAME = "vertex_ai/gemini-2.5-flash"
+DEFAULT_MODEL_NAME = "vertex_ai/gemini-3.1-flash-lite"
 os.environ.setdefault("VERTEXAI_PROJECT", "gen-lang-client-0986610697")
 os.environ.setdefault("VERTEXAI_LOCATION", "us-central1")
 
@@ -30,8 +30,11 @@ Your Opinion:
 The possible actions are:
 - share_opinion: share your opinion on the topic.
 - ask_question: ask a question to the other analysts.
+- request_research: ask the research helper to look something up; put your research question in the "Your Opinion" field. You may use this at most 2 times consecutively — after that you must choose a different action.
 - conclude: conclude the discussion and share your final opinion on the topic.
 - none: do nothing and wait for the other analysts to speak.
+
+When using "request_research", write a concise, specific question (e.g. "What was Google's cloud revenue growth in Q1 2025?"). After the research helper responds, you will get another turn to react to the findings.
 
 Topic:
 {topic}

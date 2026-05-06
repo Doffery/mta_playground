@@ -8,7 +8,7 @@ Searcher = Callable[[str], str]
 def web_search(query: str, max_results: int = 5) -> str:
     """Return a formatted string of search results for *query*."""
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))

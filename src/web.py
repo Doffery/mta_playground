@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple, Type
 from urllib.parse import urlparse
 
-from src.common.config import RunConfig, load_config
+from src.common.config import AgentProfile, RunConfig, load_config
 from src.common.orchestrator import run_discussion
 
 
@@ -111,13 +111,36 @@ HTML_PAGE = """<!doctype html>
     }
     .agent {
       display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 10px;
+      gap: 8px;
       padding: 10px;
       border: 1px solid var(--line);
       border-radius: 6px;
     }
-    .agent input { width: auto; margin-top: 3px; }
+    .agent-head {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .agent input[type="checkbox"] { width: auto; margin: 0; }
+    .agent button,
+    .ghost-button {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      padding: 7px 10px;
+    }
+    .agent button:hover,
+    .ghost-button:hover { background: #f2f5f7; }
+    .agent-editor {
+      display: none;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .agent.open .agent-editor { display: grid; }
+    .agent-editor textarea { min-height: 86px; }
+    .agent-editor label { margin: 0; font-size: 12px; color: var(--muted); }
     .result-head {
       display: flex;
       align-items: center;
@@ -150,6 +173,78 @@ HTML_PAGE = """<!doctype html>
       gap: 8px;
       align-items: center;
     }
+    .message p { white-space: pre-wrap; }
+    .md { line-height: 1.55; }
+    .md p,
+    .md ul,
+    .md ol,
+    .md pre { margin: 0 0 10px; }
+    .md p:last-child,
+    .md ul:last-child,
+    .md ol:last-child,
+    .md pre:last-child { margin-bottom: 0; }
+    .md ul,
+    .md ol { padding-left: 22px; }
+    .md code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      background: #eef2f6;
+      border: 1px solid #dce3ea;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+    .md pre {
+      background: #111827;
+      color: #f9fafb;
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+    }
+    .md pre code {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      padding: 0;
+    }
+    .md blockquote {
+      margin: 0 0 10px;
+      padding-left: 12px;
+      border-left: 3px solid var(--line);
+      color: var(--muted);
+    }
+    .md p { margin: 0 0 8px; }
+    .md p:last-child { margin-bottom: 0; }
+    .md ul, .md ol { margin: 6px 0 8px 18px; padding: 0; }
+    .md li { margin-bottom: 2px; }
+    .md strong { font-weight: 700; }
+    .md em { font-style: italic; }
+    .md a { color: var(--accent); }
+    .md code { font-family: ui-monospace, monospace; font-size: 12px; background: #f1f3f5; padding: 1px 4px; border-radius: 3px; }
+    .md pre { background: #f1f3f5; border-radius: 5px; padding: 10px; overflow-x: auto; margin: 8px 0; }
+    .md pre code { background: none; padding: 0; }
+    .md h1, .md h2, .md h3 { font-weight: 700; margin: 10px 0 4px; }
+    .md blockquote { border-left: 3px solid var(--line); margin: 0; padding-left: 10px; color: var(--muted); }
+    .message.research {
+      background: #f0f7ff;
+      border-left: 3px solid #0369a1;
+      border-top: none;
+      border-radius: 4px;
+      padding: 12px 14px;
+      margin: 8px 0;
+    }
+    .message.research + .message { border-top: 1px solid var(--line); }
+    .pill.research-badge { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+    .message.research-request {
+      background: #fefce8;
+      border-left: 3px solid #ca8a04;
+      border-top: none;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin: 6px 0;
+      font-style: italic;
+    }
+    .message.research-request + .message { border-top: 1px solid var(--line); }
+    .pill.request-badge { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
     .live {
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -157,6 +252,27 @@ HTML_PAGE = """<!doctype html>
       padding: 0 12px;
       background: #fbfcfd;
     }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
+    }
+    .tab-button {
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      padding: 8px 10px;
+    }
+    .tab-button:hover { background: #f2f5f7; }
+    .tab-button.active {
+      color: var(--ink);
+      border-bottom-color: var(--accent);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
     .error {
       border-color: #f2c38b;
       background: #fff7ed;
@@ -190,8 +306,26 @@ HTML_PAGE = """<!doctype html>
           <input id="maxRounds" name="maxRounds" type="number" min="1" max="8" value="3">
         </div>
         <div>
+          <label for="model">Model</label>
+          <input id="model" name="model" list="modelList" autocomplete="off" spellcheck="false">
+          <datalist id="modelList">
+            <option value="vertex_ai/gemini-3.1-flash-lite">
+            <option value="vertex_ai/gemini-3-flash">
+            <option value="vertex_ai/gemini-2.5-flash">
+            <option value="vertex_ai/gemini-2.5-pro">
+            <option value="vertex_ai/gemini-2.0-flash">
+            <option value="anthropic/claude-opus-4-7">
+            <option value="anthropic/claude-sonnet-4-6">
+            <option value="anthropic/claude-haiku-4-5">
+            <option value="openai/gpt-4o">
+            <option value="openai/gpt-4o-mini">
+            <option value="openai/o3-mini">
+          </datalist>
+        </div>
+        <div>
           <label>Analyst profiles</label>
           <div id="agents" class="stack"></div>
+          <button class="ghost-button" id="addAgentButton" type="button">Add analyst</button>
         </div>
         <button id="submitButton" type="submit">Analyze</button>
       </form>
@@ -206,11 +340,12 @@ HTML_PAGE = """<!doctype html>
     </section>
   </main>
   <script>
-    const state = { config: null };
+    const state = { config: null, agents: [] };
     const form = document.querySelector("#analysisForm");
     const output = document.querySelector("#output");
     const statusBox = document.querySelector("#status");
     const submitButton = document.querySelector("#submitButton");
+    const addAgentButton = document.querySelector("#addAgentButton");
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({
@@ -220,47 +355,93 @@ HTML_PAGE = """<!doctype html>
 
     function renderConfig(config) {
       state.config = config;
+      state.agents = config.agents.map((agent, index) => ({
+        id: `agent-${index}-${Date.now()}`,
+        selected: true,
+        open: false,
+        name: agent.name,
+        persona: agent.persona,
+        risk_appetite: agent.risk_appetite || "balanced"
+      }));
       document.querySelector("#topic").value = config.topic;
       document.querySelector("#maxRounds").value = config.max_rounds;
+      document.querySelector("#model").value = config.model_name;
       document.querySelector("#modelName").textContent = config.model_name;
-      document.querySelector("#agents").innerHTML = config.agents.map(agent => `
-        <label class="agent">
-          <input type="checkbox" name="agent" value="${escapeHtml(agent.name)}" checked>
-          <span>
-            <strong>${escapeHtml(agent.name)}</strong>
-            <span class="muted"> ${escapeHtml(agent.risk_appetite)}</span><br>
-            <span class="muted">${escapeHtml(agent.persona)}</span>
-          </span>
-        </label>
+      renderAgentProfiles();
+    }
+
+    function renderAgentProfiles() {
+      document.querySelector("#agents").innerHTML = state.agents.map((agent, index) => `
+        <div class="agent${agent.open ? " open" : ""}" data-agent-id="${escapeHtml(agent.id)}">
+          <div class="agent-head">
+            <input type="checkbox" data-agent-field="selected" ${agent.selected ? "checked" : ""}>
+            <button type="button" data-agent-action="toggle">
+              <strong>${escapeHtml(agent.name || "Untitled analyst")}</strong>
+              <span class="muted"> ${escapeHtml(agent.risk_appetite || "balanced")}</span>
+            </button>
+            <button type="button" data-agent-action="remove">Remove</button>
+          </div>
+          <div class="muted">${escapeHtml(agent.persona || "No persona set.")}</div>
+          <div class="agent-editor">
+            <label>Name</label>
+            <input data-agent-field="name" value="${escapeHtml(agent.name)}">
+            <label>Risk appetite</label>
+            <select data-agent-field="risk_appetite">
+              ${["low", "balanced", "high"].map(value => `
+                <option value="${value}" ${agent.risk_appetite === value ? "selected" : ""}>${value}</option>
+              `).join("")}
+            </select>
+            <label>Persona</label>
+            <textarea data-agent-field="persona">${escapeHtml(agent.persona)}</textarea>
+          </div>
+        </div>
       `).join("");
+    }
+
+    function updateAgent(id, patch) {
+      state.agents = state.agents.map(agent => agent.id === id ? { ...agent, ...patch } : agent);
+    }
+
+    function collectAgents() {
+      return state.agents
+        .filter(agent => agent.selected)
+        .map(agent => ({
+          name: agent.name.trim(),
+          persona: agent.persona.trim(),
+          risk_appetite: agent.risk_appetite || "balanced"
+        }))
+        .filter(agent => agent.name);
+    }
+
+    function showTab(name) {
+      document.querySelectorAll(".tab-button").forEach(button => {
+        button.classList.toggle("active", button.dataset.tab === name);
+      });
+      document.querySelectorAll(".tab-panel").forEach(panel => {
+        panel.classList.toggle("active", panel.dataset.panel === name);
+      });
     }
 
     function renderResult(data) {
       document.querySelector("#runPath").textContent = data.output_dir;
       statusBox.textContent = "";
       output.innerHTML = `
+        <div class="tabs">
+          <button class="tab-button active" data-tab="final" type="button">Final Key Points</button>
+          <button class="tab-button" data-tab="transcript" type="button">Transcript</button>
+        </div>
         <div class="summary">
           <div class="metric"><span class="muted">Final stance</span><strong>${escapeHtml(data.summary.stance)}</strong></div>
           <div class="metric"><span class="muted">Rounds</span><strong>${escapeHtml(data.rounds_executed)}</strong></div>
           <div class="metric"><span class="muted">Messages</span><strong>${escapeHtml(data.transcript.length)}</strong></div>
         </div>
-        <h2>Key Points</h2>
-        <div class="stack">
-          ${Object.entries(data.summary.key_points).map(([agent, point]) => `
-            <div class="message">
-              <h3>${escapeHtml(agent)}</h3>
-              <p>${escapeHtml(point)}</p>
-            </div>
-          `).join("")}
+        <div class="tab-panel active" data-panel="final">
+          <h2>Final Key Points</h2>
+          ${finalReportHtml(data.summary)}
         </div>
-        <h2 style="margin-top: 18px;">Transcript</h2>
-        <div>
-          ${data.transcript.map(message => `
-            <div class="message">
-              <h3>${escapeHtml(message.agent)} <span class="pill">Round ${message.round_index + 1}</span></h3>
-              <p>${escapeHtml(message.content)}</p>
-            </div>
-          `).join("")}
+        <div class="tab-panel" data-panel="transcript">
+          <h2>Transcript</h2>
+          <div>${data.transcript.map(messageHtml).join("")}</div>
         </div>
       `;
     }
@@ -268,19 +449,172 @@ HTML_PAGE = """<!doctype html>
     function startLiveRun() {
       document.querySelector("#runPath").textContent = "Running";
       output.innerHTML = `
-        <div id="liveTranscript" class="live"></div>
-        <div id="finalResult"></div>
+        <div class="tabs">
+          <button class="tab-button active" data-tab="transcript" type="button">Transcript</button>
+          <button class="tab-button" data-tab="final" type="button">Final Key Points</button>
+        </div>
+        <div class="tab-panel active" data-panel="transcript">
+          <div id="liveTranscript" class="live"></div>
+        </div>
+        <div class="tab-panel" data-panel="final">
+          <div id="finalResult"></div>
+        </div>
       `;
     }
 
-    function appendTurn(message) {
-      const liveTranscript = document.querySelector("#liveTranscript");
-      liveTranscript.insertAdjacentHTML("beforeend", `
+    function renderMd(text) {
+      const source = String(text || "").replace(/\\r\\n/g, "\\n");
+      const lines = source.split("\\n");
+      const html = [];
+      let paragraph = [];
+      let listType = null;
+      let inCode = false;
+      let codeLines = [];
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        html.push(`<p>${renderInline(paragraph.join(" "))}</p>`);
+        paragraph = [];
+      }
+
+      function closeList() {
+        if (!listType) return;
+        html.push(`</${listType}>`);
+        listType = null;
+      }
+
+      function openList(type) {
+        if (listType === type) return;
+        closeList();
+        flushParagraph();
+        listType = type;
+        html.push(`<${type}>`);
+      }
+
+      for (const line of lines) {
+        if (line.trim().startsWith("```")) {
+          if (inCode) {
+            html.push(`<pre><code>${escapeHtml(codeLines.join("\\n"))}</code></pre>`);
+            codeLines = [];
+            inCode = false;
+          } else {
+            flushParagraph();
+            closeList();
+            inCode = true;
+          }
+          continue;
+        }
+
+        if (inCode) {
+          codeLines.push(line);
+          continue;
+        }
+
+        if (!line.trim()) {
+          flushParagraph();
+          closeList();
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          closeList();
+          const level = heading[1].length + 2;
+          html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+          continue;
+        }
+
+        const quote = line.match(/^>\\s?(.+)$/);
+        if (quote) {
+          flushParagraph();
+          closeList();
+          html.push(`<blockquote>${renderInline(quote[1])}</blockquote>`);
+          continue;
+        }
+
+        const unordered = line.match(/^[-*]\\s+(.+)$/);
+        if (unordered) {
+          openList("ul");
+          html.push(`<li>${renderInline(unordered[1])}</li>`);
+          continue;
+        }
+
+        const ordered = line.match(/^\\d+\\.\\s+(.+)$/);
+        if (ordered) {
+          openList("ol");
+          html.push(`<li>${renderInline(ordered[1])}</li>`);
+          continue;
+        }
+
+        closeList();
+        paragraph.push(line.trim());
+      }
+
+      if (inCode) {
+        html.push(`<pre><code>${escapeHtml(codeLines.join("\\n"))}</code></pre>`);
+      }
+      flushParagraph();
+      closeList();
+      return html.join("");
+    }
+
+    function renderInline(text) {
+      let html = escapeHtml(text);
+      html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+      html = html.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+      html = html.replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
+      html = html.replace(
+        /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      );
+      return html;
+    }
+
+    function keyPointsHtml(keyPoints) {
+      return Object.entries(keyPoints).map(([agent, point]) => `
         <div class="message">
-          <h3>${escapeHtml(message.agent)} <span class="pill">Round ${message.round_index + 1}</span></h3>
-          <p>${escapeHtml(message.content)}</p>
+          <h3>${escapeHtml(agent)}</h3>
+          <div class="md">${renderMd(point)}</div>
         </div>
-      `);
+      `).join("");
+    }
+
+    function finalReportHtml(summary) {
+      if (summary.final_report) {
+        return `<div class="message"><div class="md">${renderMd(summary.final_report)}</div></div>`;
+      }
+      return `<div class="stack">${keyPointsHtml(summary.key_points)}</div>`;
+    }
+
+    function messageHtml(message) {
+      const isResearch = message.agent === "research_helper";
+      const isRequest = message.content.startsWith("[Research request]");
+
+      let cssClass = "";
+      let badge = `<span class="pill">Round ${message.round_index + 1}</span>`;
+
+      if (isResearch) {
+        cssClass = " research";
+        badge = `<span class="pill research-badge">research</span>`;
+      } else if (isRequest) {
+        cssClass = " research-request";
+        badge = `<span class="pill request-badge">requesting research</span>`;
+      }
+
+      const rawBody = isRequest
+        ? message.content.replace("[Research request] ", "")
+        : message.content;
+
+      return `
+        <div class="message${cssClass}">
+          <h3>${escapeHtml(message.agent)} ${badge}</h3>
+          <div class="md">${renderMd(rawBody)}</div>
+        </div>`;
+    }
+
+    function appendTurn(message) {
+      document.querySelector("#liveTranscript").insertAdjacentHTML("beforeend", messageHtml(message));
     }
 
     function renderFinal(data) {
@@ -292,16 +626,10 @@ HTML_PAGE = """<!doctype html>
           <div class="metric"><span class="muted">Rounds</span><strong>${escapeHtml(data.rounds_executed)}</strong></div>
           <div class="metric"><span class="muted">Messages</span><strong>${escapeHtml(data.transcript.length)}</strong></div>
         </div>
-        <h2>Key Points</h2>
-        <div class="stack">
-          ${Object.entries(data.summary.key_points).map(([agent, point]) => `
-            <div class="message">
-              <h3>${escapeHtml(agent)}</h3>
-              <p>${escapeHtml(point)}</p>
-            </div>
-          `).join("")}
-        </div>
+        <h2>Final Key Points</h2>
+        ${finalReportHtml(data.summary)}
       `;
+      showTab("final");
     }
 
     async function readAnalysisStream(response) {
@@ -334,21 +662,77 @@ HTML_PAGE = """<!doctype html>
       renderConfig(await response.json());
     }
 
+    document.querySelector("#agents").addEventListener("click", event => {
+      const card = event.target.closest(".agent");
+      if (!card) return;
+      const id = card.dataset.agentId;
+      const action = event.target.closest("[data-agent-action]")?.dataset.agentAction;
+      if (action === "toggle") {
+        updateAgent(id, { open: !state.agents.find(agent => agent.id === id).open });
+        renderAgentProfiles();
+      } else if (action === "remove") {
+        state.agents = state.agents.filter(agent => agent.id !== id);
+        renderAgentProfiles();
+      }
+    });
+
+    document.querySelector("#agents").addEventListener("input", event => {
+      const card = event.target.closest(".agent");
+      const field = event.target.dataset.agentField;
+      if (!card || !field) return;
+      const value = field === "selected" ? event.target.checked : event.target.value;
+      updateAgent(card.dataset.agentId, { [field]: value });
+    });
+
+    document.querySelector("#agents").addEventListener("change", event => {
+      const card = event.target.closest(".agent");
+      const field = event.target.dataset.agentField;
+      if (!card || !field) return;
+      const value = field === "selected" ? event.target.checked : event.target.value;
+      updateAgent(card.dataset.agentId, { [field]: value });
+      renderAgentProfiles();
+    });
+
+    addAgentButton.addEventListener("click", () => {
+      state.agents.push({
+        id: `custom-${Date.now()}`,
+        selected: true,
+        open: true,
+        name: `custom_analyst_${state.agents.length + 1}`,
+        persona: "Describe this analyst's investment perspective.",
+        risk_appetite: "balanced"
+      });
+      renderAgentProfiles();
+    });
+
+    output.addEventListener("click", event => {
+      const tab = event.target.closest(".tab-button")?.dataset.tab;
+      if (tab) showTab(tab);
+    });
+
+    document.querySelector("#model").addEventListener("input", event => {
+      document.querySelector("#modelName").textContent = event.target.value || "—";
+    });
+
     form.addEventListener("submit", async event => {
       event.preventDefault();
       startLiveRun();
       statusBox.className = "muted";
       statusBox.textContent = "Starting analysis...";
       submitButton.disabled = true;
-      const selectedAgents = [...document.querySelectorAll("input[name='agent']:checked")].map(input => input.value);
+      const selectedAgents = collectAgents();
       try {
+        if (!selectedAgents.length) {
+          throw new Error("Select or add at least one analyst profile.");
+        }
         const response = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             topic: document.querySelector("#topic").value,
             max_rounds: Number(document.querySelector("#maxRounds").value),
-            agents: selectedAgents
+            model_name: document.querySelector("#model").value.trim(),
+            agent_profiles: selectedAgents
           })
         });
         if (!response.ok) {
@@ -392,11 +776,27 @@ class WebApp:
 
     def prepare_run(self, payload: Dict[str, Any]) -> Tuple[RunConfig, str, int]:
         config = self.load_config()
-        selected_agents = set(payload.get("agents") or [])
-        if selected_agents:
-            config.agents = [agent for agent in config.agents if agent.name in selected_agents]
+        raw_profiles = payload.get("agent_profiles") or []
+        if raw_profiles:
+            config.agents = [
+                AgentProfile(
+                    name=str(agent.get("name", "")).strip(),
+                    persona=str(agent.get("persona", "")).strip(),
+                    risk_appetite=str(agent.get("risk_appetite", "balanced")).strip() or "balanced",
+                )
+                for agent in raw_profiles
+                if str(agent.get("name", "")).strip()
+            ]
+        else:
+            selected_agents = set(payload.get("agents") or [])
+            if selected_agents:
+                config.agents = [agent for agent in config.agents if agent.name in selected_agents]
         if not config.agents:
             raise ValueError("Select at least one analyst profile.")
+
+        model_name = str(payload.get("model_name") or "").strip()
+        if model_name:
+            config.model_name = model_name
 
         topic = str(payload.get("topic") or config.topic).strip()
         if not topic:

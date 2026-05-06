@@ -44,9 +44,12 @@ Log outputs to `runs/<timestamp>/` and emit a short summary at the end (particip
 ## Architecture Notes
 - Backbone: LLMs for reasoning; prompt templates encode each analyst’s persona and risk tolerance.
 - Orchestration: turn-based discussion until convergence or a max round count; a judge/aggregator agent produces the final recommendation.
+- Research helper: agents can issue a `request_research` action with a question; at the end of each round the `research_helper` fulfills all requests (deduplicated) via DuckDuckGo web search and posts results as its own message to the shared transcript. All agents see the results in the next round. Lives in `src/agents/research_helper.py` and is designed to accept additional research capabilities beyond search.
 - Safety: flag low-confidence outputs and missing data.
 
 ## Roadmap / Next Steps
-- Scaffold `src/main.py` with a minimal agent loop and a sample config in `configs/example.yaml`.
-- Add fixtures and smoke tests mirroring the sample config.
+- ~~Scaffold `src/main.py` with a minimal agent loop and a sample config in `configs/example.yaml`.~~ Done.
+- ~~Add fixtures and smoke tests mirroring the sample config.~~ Done.
 - Capture experiment metadata (prompt version, model, seed) in run outputs for reproducibility.
+- Replace placeholder stance derivation (`_derive_stance`) with actual LLM-based aggregation.
+- V3: integrate financial data APIs (earnings, price history) as a structured fact sheet alongside web search.
